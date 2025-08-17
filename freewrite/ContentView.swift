@@ -410,6 +410,7 @@ struct ContentView: View {
         
         HStack(spacing: 0) {
             // Main content
+
             ZStack(alignment: .bottom) {
                 backgroundColor
                     .ignoresSafeArea()
@@ -465,8 +466,6 @@ struct ContentView: View {
                                     }
                                     .contentMargins(.bottom, viewHeight / 4)
                 }
-
-                // Bottom navigation overlay
                 VStack {
                     Spacer()
                     HStack {
