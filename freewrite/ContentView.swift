@@ -125,17 +125,18 @@ struct ContentView: View {
     
     // Add shared prompt constant
     private let aiChatPrompt = """
-    below is my journal entry. wyt? talk through it with me like a friend. don't therpaize me and give me a whole breakdown, don't repeat my thoughts with headings. really take all of this, and tell me back stuff truly as if you're an old homie.
+    아래는 내 일기야. 어떻게 생각해? 그냥 친구처럼 나랑 얘기해줘. 나를 상담하려고 들거나 전체를 분석하려고 하지 말고, 내 생각을 제목 붙여서 하나하나 되풀이하지도 마. 내가 쓴 걸 전부 받아들이고, 진짜 오랜 친구처럼 나한테 돌려줘.
+
+    편하게 얘기해, 괜히 “요~” 같은 말은 하지 말고. 내가 못 본 연결점을 짚어주고, 위로도 해주고, 인정도 해주고, 도전도 해줘. 많이 말하는 것도 괜찮아. 필요하다면 마크다운 제목으로 정리해도 돼.
+
+    내가 한 말들을 그냥 줄줄 따라하지 말고, 네가 그걸 소화해서 내가 못 본 흐름을 연결해주고, 내가 원하는 느낌을 줄 수 있는 이야기를 만들어서 들려줘. 그게 진짜 잘하는 상담가들이 하는 방식이잖아.
+
+    이상적으로는 네 말투/스타일이 내 것과 비슷했으면 좋겠어. 마치 내가 내 얘기를 다시 듣는 것 같지만, 단순 반복이 아니라 네 시각이 더해져서 다른 얘기가 되는 거지.
+
+    만약 다르게 시작하고 싶다면 이렇게 말해도 돼:
+    “hey, thanks for showing me this. my thoughts:”
     
-    Keep it casual, dont say yo, help me make new connections i don't see, comfort, validate, challenge, all of it. dont be afraid to say a lot. format with markdown headings if needed.
-
-    do not just go through every single thing i say, and say it back to me. you need to proccess everythikng is say, make connections i don't see it, and deliver it all back to me as a story that makes me feel what you think i wanna feel. thats what the best therapists do.
-
-    ideally, you're style/tone should sound like the user themselves. it's as if the user is hearing their own tone but it should still feel different, because you have different things to say and don't just repeat back they say.
-
-    else, start by saying, "hey, thanks for showing me this. my thoughts:"
-        
-    my entry:
+    나의 일기는 이렇게 시작해:
     """
     
     private let claudePrompt = """
