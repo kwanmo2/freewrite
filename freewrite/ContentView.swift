@@ -46,7 +46,8 @@ struct HeartEmoji: Identifiable {
 struct ContentView: View {
     private let headerString = "\n\n"
     @State private var entries: [HumanEntry] = []
-    @State private var text: String = ""  // Remove initial welcome text since we'll handle it in createNewEntry
+    @State private var text: String = ""  // Body text
+    @State private var title: String = ""
     
     @State private var isFullscreen = false
     @State private var selectedFont: String = "Lato-Regular"
@@ -82,15 +83,23 @@ struct ContentView: View {
     @State private var isHoveringHistoryText = false
     @State private var isHoveringHistoryPath = false
     @State private var isHoveringHistoryArrow = false
-    @State private var colorScheme: ColorScheme = .light // Add state for color scheme
-    @State private var isHoveringThemeToggle = false // Add state for theme toggle hover
-    @State private var didCopyPrompt: Bool = false // Add state for copy prompt feedback
+    @State private var colorScheme: ColorScheme = .light
+    @State private var currentBackground: Color = .white
+    @State private var themeIndex: Int = 0
+    @State private var isHoveringThemeToggle = false
+    @State private var didCopyPrompt: Bool = false
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let entryHeight: CGFloat = 40
     
     let availableFonts = NSFontManager.shared.availableFontFamilies
     let standardFonts = ["Lato-Regular", "Arial", ".AppleSystemUIFont", "Times New Roman"]
     let fontSizes: [CGFloat] = [16, 18, 20, 22, 24, 26]
+    let themeOptions: [(color: Color, scheme: ColorScheme)] = [
+        (.white, .light),
+        (Color(red: 0.95, green: 0.95, blue: 0.90), .light),
+        (Color(red: 0.90, green: 0.95, blue: 0.98), .light),
+        (.black, .dark)
+    ]
     let placeholderOptions = [
         "\n\nBegin writing",
         "\n\nPick a thought and go",
@@ -153,9 +162,11 @@ struct ContentView: View {
     
     // Initialize with saved theme preference if available
     init() {
-        // Load saved color scheme preference
-        let savedScheme = UserDefaults.standard.string(forKey: "colorScheme") ?? "light"
-        _colorScheme = State(initialValue: savedScheme == "dark" ? .dark : .light)
+        let savedIndex = UserDefaults.standard.integer(forKey: "themeIndex")
+        let option = themeOptions[savedIndex % themeOptions.count]
+        _themeIndex = State(initialValue: savedIndex)
+        _currentBackground = State(initialValue: option.color)
+        _colorScheme = State(initialValue: option.scheme)
     }
     
     // Modify getDocumentsDirectory to use cached value
@@ -171,7 +182,8 @@ struct ContentView: View {
         print("Attempting to save file to: \(fileURL.path)")
         
         do {
-            try text.write(to: fileURL, atomically: true, encoding: .utf8)
+            let combined = title + "\n" + text
+            try combined.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved file")
         } catch {
             print("Error saving file: \(error)")
@@ -188,7 +200,10 @@ struct ContentView: View {
         
         do {
             if fileManager.fileExists(atPath: fileURL.path) {
-                text = try String(contentsOf: fileURL, encoding: .utf8)
+                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                let components = content.components(separatedBy: "\n")
+                title = components.first ?? ""
+                text = components.dropFirst().joined(separator: "\n")
                 print("Successfully loaded file")
             } else {
                 print("File does not exist yet")
@@ -383,8 +398,6 @@ struct ContentView: View {
         return colorScheme == .light ? Color.primary : Color.white
     }
     
-    @State private var viewHeight: CGFloat = 0
-    
     var body: some View {
         let buttonBackground = colorScheme == .light ? Color.white : Color.black
         let navHeight: CGFloat = 68
@@ -393,11 +406,17 @@ struct ContentView: View {
         
         HStack(spacing: 0) {
             // Main content
-            ZStack {
-                Color(colorScheme == .light ? .white : .black)
+            ZStack(alignment: .bottom) {
+                currentBackground
                     .ignoresSafeArea()
                 
-              
+                VStack(alignment: .leading, spacing: 0) {
+                    TextField("Title", text: $title)
+                        .font(.custom(selectedFont, size: fontSize * 1.5))
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 4)
+                        .textFieldStyle(PlainTextFieldStyle())
+
                     TextEditor(text: Binding(
                         get: { text },
                         set: { newValue in
@@ -409,16 +428,26 @@ struct ContentView: View {
                             }
                         }
                     ))
-                    .background(Color(colorScheme == .light ? .white : .black))
+                    .background(currentBackground)
                     .font(.custom(selectedFont, size: fontSize))
                     .foregroundColor(colorScheme == .light ? Color(red: 0.20, green: 0.20, blue: 0.20) : Color(red: 0.9, green: 0.9, blue: 0.9))
                     .scrollContentBackground(.hidden)
                     .scrollIndicators(.never)
                     .lineSpacing(lineHeight)
                     .frame(maxWidth: 650)
-                    
-          
-                    .id("\(selectedFont)-\(fontSize)-\(colorScheme)")
+                    .background(
+                        GeometryReader { _ in
+                            let lineHeight = fontSize * 1.5
+                            let lines = text.components(separatedBy: "\n").count
+                            Rectangle()
+                                .fill(colorScheme == .light ? Color.gray.opacity(0.1) : Color.white.opacity(0.1))
+                                .frame(height: lineHeight)
+                                .offset(y: lineHeight * CGFloat(max(lines - 1, 0)))
+                                .animation(.easeInOut(duration: 0.2), value: text)
+                        }
+                    )
+
+                    .id("\(selectedFont)-\(fontSize)-\(colorScheme)-\(themeIndex)")
                     .padding(.bottom, bottomNavOpacity > 0 ? navHeight : 0)
                     .ignoresSafeArea()
                     .colorScheme(colorScheme)
@@ -439,14 +468,8 @@ struct ContentView: View {
                             }
                         }, alignment: .topLeading
                     )
-                    .onGeometryChange(for: CGFloat.self) { proxy in
-                                    proxy.size.height
-                                } action: { height in
-                                    viewHeight = height
-                                }
-                                .contentMargins(.bottom, viewHeight / 4)
-                    
-                
+                }
+
                 VStack {
                     Spacer()
                     HStack {
@@ -819,13 +842,15 @@ struct ContentView: View {
                             Text("•")
                                 .foregroundColor(.gray)
                             
-                            // Theme toggle button
+                            // Theme palette button
                             Button(action: {
-                                colorScheme = colorScheme == .light ? .dark : .light
-                                // Save preference
-                                UserDefaults.standard.set(colorScheme == .light ? "light" : "dark", forKey: "colorScheme")
+                                themeIndex = (themeIndex + 1) % themeOptions.count
+                                let option = themeOptions[themeIndex]
+                                currentBackground = option.color
+                                colorScheme = option.scheme
+                                UserDefaults.standard.set(themeIndex, forKey: "themeIndex")
                             }) {
-                                Image(systemName: colorScheme == .light ? "moon.fill" : "sun.max.fill")
+                                Image(systemName: "paintpalette.fill")
                                     .foregroundColor(isHoveringThemeToggle ? textHoverColor : textColor)
                             }
                             .buttonStyle(.plain)
@@ -869,7 +894,7 @@ struct ContentView: View {
                         }
                     }
                     .padding()
-                    .background(Color(colorScheme == .light ? .white : .black))
+                    .background(currentBackground)
                     .opacity(bottomNavOpacity)
                     .onHover { hovering in
                         isHoveringBottomNav = hovering
@@ -1007,7 +1032,7 @@ struct ContentView: View {
                                     .padding(.vertical, 8)
                                     .background(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .fill(backgroundColor(for: entry))
+                                            .fill(entryBackground(for: entry))
                                     )
                                 }
                                 .buttonStyle(PlainButtonStyle())
@@ -1031,7 +1056,7 @@ struct ContentView: View {
                     .scrollIndicators(.never)
                 }
                 .frame(width: 200)
-                .background(Color(colorScheme == .light ? .white : NSColor.black))
+                .background(currentBackground)
             }
         }
         .frame(minWidth: 1100, minHeight: 600)
@@ -1043,6 +1068,12 @@ struct ContentView: View {
         }
         .onChange(of: text) { _ in
             // Save current entry when text changes
+            if let currentId = selectedEntryId,
+               let currentEntry = entries.first(where: { $0.id == currentId }) {
+                saveEntry(entry: currentEntry)
+            }
+        }
+        .onChange(of: title) { _ in
             if let currentId = selectedEntryId,
                let currentEntry = entries.first(where: { $0.id == currentId }) {
                 saveEntry(entry: currentEntry)
@@ -1068,7 +1099,7 @@ struct ContentView: View {
         }
     }
     
-    private func backgroundColor(for entry: HumanEntry) -> Color {
+    private func entryBackground(for entry: HumanEntry) -> Color {
         if entry.id == selectedEntryId {
             return Color.gray.opacity(0.1)  // More subtle selection highlight
         } else if entry.id == hoveredEntryId {
@@ -1103,7 +1134,8 @@ struct ContentView: View {
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
         
         do {
-            try text.write(to: fileURL, atomically: true, encoding: .utf8)
+            let combined = title + "\n" + text
+            try combined.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved entry: \(entry.filename)")
             updatePreviewText(for: entry)  // Update preview after saving
         } catch {
@@ -1117,7 +1149,10 @@ struct ContentView: View {
         
         do {
             if fileManager.fileExists(atPath: fileURL.path) {
-                text = try String(contentsOf: fileURL, encoding: .utf8)
+                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                let components = content.components(separatedBy: "\n")
+                title = components.first ?? ""
+                text = components.dropFirst().joined(separator: "\n")
                 print("Successfully loaded entry: \(entry.filename)")
             }
         } catch {
@@ -1135,6 +1170,7 @@ struct ContentView: View {
             // Read welcome message from default.md
             if let defaultMessageURL = Bundle.main.url(forResource: "default", withExtension: "md"),
                let defaultMessage = try? String(contentsOf: defaultMessageURL, encoding: .utf8) {
+                title = ""
                 text = "\n\n" + defaultMessage
             }
             // Save the welcome message immediately
@@ -1142,7 +1178,8 @@ struct ContentView: View {
             // Update the preview text
             updatePreviewText(for: newEntry)
         } else {
-            // Regular new entry starts with newlines
+            // Regular new entry starts empty
+            title = ""
             text = "\n\n"
             // Randomize placeholder text for new entry
             placeholderText = placeholderOptions.randomElement() ?? "\n\nBegin writing"
@@ -1152,7 +1189,7 @@ struct ContentView: View {
     }
     
     private func openChatGPT() {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedText = (title + "\n" + text).trimmingCharacters(in: .whitespacesAndNewlines)
         let fullText = aiChatPrompt + "\n\n" + trimmedText
         
         if let encodedText = fullText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
@@ -1162,7 +1199,7 @@ struct ContentView: View {
     }
     
     private func openClaude() {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedText = (title + "\n" + text).trimmingCharacters(in: .whitespacesAndNewlines)
         let fullText = claudePrompt + "\n\n" + trimmedText
         
         if let encodedText = fullText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
@@ -1172,7 +1209,7 @@ struct ContentView: View {
     }
 
     private func copyPromptToClipboard() {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedText = (title + "\n" + text).trimmingCharacters(in: .whitespacesAndNewlines)
         let fullText = aiChatPrompt + "\n\n" + trimmedText
 
         let pasteboard = NSPasteboard.general
