@@ -413,6 +413,8 @@ struct ContentView: View {
         let navHeight: CGFloat = 68
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
         let textHoverColor = colorScheme == .light ? Color.black : Color.white
+        let highlightLineHeight = fontSize * 1.5
+        let highlightLines = text.components(separatedBy: "\n").count
         
         HStack(spacing: 0) {
             // Main content
@@ -447,12 +449,10 @@ struct ContentView: View {
                     .frame(maxWidth: 650)
                     .background(
                         GeometryReader { _ in
-                            let lineHeight = fontSize * 1.5
-                            let lines = text.components(separatedBy: "\n").count
                             Rectangle()
                                 .fill(colorScheme == .light ? Color.gray.opacity(0.1) : Color.white.opacity(0.1))
-                                .frame(height: lineHeight)
-                                .offset(y: lineHeight * CGFloat(max(lines - 1, 0)))
+                                .frame(height: highlightLineHeight)
+                                .offset(y: highlightLineHeight * CGFloat(max(highlightLines - 1, 0)))
                                 .animation(.easeInOut(duration: 0.2), value: text)
                         }
                     )
@@ -479,12 +479,10 @@ struct ContentView: View {
                         .frame(maxWidth: 650)
                         .background(
                             GeometryReader { _ in
-                                let lineHeight = fontSize * 1.5
-                                let lines = text.components(separatedBy: "\n").count
                                 Rectangle()
                                     .fill(colorScheme == .light ? Color.gray.opacity(0.1) : Color.white.opacity(0.1))
-                                    .frame(height: lineHeight)
-                                    .offset(y: lineHeight * CGFloat(max(lines - 1, 0)))
+                                    .frame(height: highlightLineHeight)
+                                    .offset(y: highlightLineHeight * CGFloat(max(highlightLines - 1, 0)))
                                     .animation(.easeInOut(duration: 0.2), value: text)
                             }
                         }, alignment: .topLeading
