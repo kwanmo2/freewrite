@@ -47,8 +47,10 @@ struct ContentView: View {
     @State private var entries: [HumanEntry] = []
     @State private var text: String = ""  // Body text
     @State private var title: String = ""
+
     @State private var backgroundColor: Color = .white
     @State private var themeIndex: Int = 0
+
     
     @State private var isFullscreen = false
     @State private var selectedFont: String = "Lato-Regular"
@@ -84,9 +86,11 @@ struct ContentView: View {
     @State private var isHoveringHistoryText = false
     @State private var isHoveringHistoryPath = false
     @State private var isHoveringHistoryArrow = false
-    @State private var colorScheme: ColorScheme = .light // Add state for color scheme
-    @State private var isHoveringThemeToggle = false // Add state for theme toggle hover
-    @State private var didCopyPrompt: Bool = false // Add state for copy prompt feedback
+    @State private var colorScheme: ColorScheme = .light
+    @State private var currentBackground: Color = .white
+    @State private var themeIndex: Int = 0
+    @State private var isHoveringThemeToggle = false
+    @State private var didCopyPrompt: Bool = false
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let entryHeight: CGFloat = 40
     
@@ -95,9 +99,10 @@ struct ContentView: View {
     let fontSizes: [CGFloat] = [16, 18, 20, 22, 24, 26]
     let themeOptions: [(color: Color, scheme: ColorScheme)] = [
         (.white, .light),
-        (.black, .dark),
         (Color(red: 0.95, green: 0.95, blue: 0.90), .light),
-        (Color(red: 0.90, green: 0.95, blue: 0.98), .light)
+        (Color(red: 0.90, green: 0.95, blue: 0.98), .light),
+        (.black, .dark)
+
     ]
     let placeholderOptions = [
         "Begin writing",
@@ -162,9 +167,10 @@ struct ContentView: View {
     // Initialize with saved theme preference if available
     init() {
         let savedIndex = UserDefaults.standard.integer(forKey: "themeIndex")
-        _themeIndex = State(initialValue: savedIndex)
         let option = themeOptions[savedIndex % themeOptions.count]
-        _backgroundColor = State(initialValue: option.color)
+        _themeIndex = State(initialValue: savedIndex)
+        _currentBackground = State(initialValue: option.color)
+
         _colorScheme = State(initialValue: option.scheme)
     }
     
@@ -182,6 +188,8 @@ struct ContentView: View {
 
         let combined = title + "\n" + text
         do {
+            let combined = title + "\n" + text
+
             try combined.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved file")
         } catch {
@@ -401,8 +409,6 @@ struct ContentView: View {
         return colorScheme == .light ? Color.primary : Color.white
     }
     
-    @State private var viewHeight: CGFloat = 0
-    
     var body: some View {
         let navHeight: CGFloat = 68
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
@@ -410,9 +416,50 @@ struct ContentView: View {
         
         HStack(spacing: 0) {
             // Main content
-
             ZStack(alignment: .bottom) {
-                backgroundColor
+                currentBackground
+                    .ignoresSafeArea()
+                
+                VStack(alignment: .leading, spacing: 0) {
+                    TextField("Title", text: $title)
+                        .font(.custom(selectedFont, size: fontSize * 1.5))
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 4)
+                        .textFieldStyle(PlainTextFieldStyle())
+
+                    TextEditor(text: Binding(
+                        get: { text },
+                        set: { newValue in
+                            // Ensure the text always starts with two newlines
+                            if !newValue.hasPrefix("\n\n") {
+                                text = "\n\n" + newValue.trimmingCharacters(in: .newlines)
+                            } else {
+                                text = newValue
+                            }
+                        }
+                    ))
+                    .background(currentBackground)
+                    .font(.custom(selectedFont, size: fontSize))
+                    .foregroundColor(colorScheme == .light ? Color(red: 0.20, green: 0.20, blue: 0.20) : Color(red: 0.9, green: 0.9, blue: 0.9))
+                    .scrollContentBackground(.hidden)
+                    .scrollIndicators(.never)
+                    .lineSpacing(lineHeight)
+                    .frame(maxWidth: 650)
+                    .background(
+                        GeometryReader { _ in
+                            let lineHeight = fontSize * 1.5
+                            let lines = text.components(separatedBy: "\n").count
+                            Rectangle()
+                                .fill(colorScheme == .light ? Color.gray.opacity(0.1) : Color.white.opacity(0.1))
+                                .frame(height: lineHeight)
+                                .offset(y: lineHeight * CGFloat(max(lines - 1, 0)))
+                                .animation(.easeInOut(duration: 0.2), value: text)
+                        }
+                    )
+
+                    .id("\(selectedFont)-\(fontSize)-\(colorScheme)-\(themeIndex)")
+                    .padding(.bottom, bottomNavOpacity > 0 ? navHeight : 0)
+
                     .ignoresSafeArea()
 
                 VStack(alignment: .leading, spacing: 0) {
@@ -440,32 +487,11 @@ struct ContentView: View {
                                     .offset(y: lineHeight * CGFloat(max(lines - 1, 0)))
                                     .animation(.easeInOut(duration: 0.2), value: text)
                             }
-                        )
-                        .overlay(
-                            ZStack(alignment: .topLeading) {
-                                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Text(placeholderText)
-                                        .font(.custom(selectedFont, size: fontSize))
-                                        .foregroundColor(colorScheme == .light ? .gray.opacity(0.5) : .gray.opacity(0.6))
-                                        .allowsHitTesting(false)
-                                        .offset(x: 5, y: placeholderOffset)
-                                }
-                            }, alignment: .topLeading
-                        )
-                        .id("\(selectedFont)-\(fontSize)-\(colorScheme)-\(themeIndex)")
-                        .padding(.bottom, bottomNavOpacity > 0 ? navHeight : 0)
-                        .ignoresSafeArea()
-                        .colorScheme(colorScheme)
-                        .onAppear {
-                            placeholderText = placeholderOptions.randomElement() ?? "Begin writing"
-                        }
-                        .onGeometryChange(for: CGFloat.self) { proxy in
-                                        proxy.size.height
-                                    } action: { height in
-                                        viewHeight = height
-                                    }
-                                    .contentMargins(.bottom, viewHeight / 4)
+                        }, alignment: .topLeading
+                    )
                 }
+
+
                 VStack {
                     Spacer()
                     HStack {
@@ -838,11 +864,13 @@ struct ContentView: View {
                             Text("•")
                                 .foregroundColor(.gray)
                             
-                            // Theme toggle button
+                            // Theme palette button
                             Button(action: {
                                 themeIndex = (themeIndex + 1) % themeOptions.count
                                 let option = themeOptions[themeIndex]
-                                backgroundColor = option.color
+
+                                currentBackground = option.color
+
                                 colorScheme = option.scheme
                                 UserDefaults.standard.set(themeIndex, forKey: "themeIndex")
                             }) {
@@ -890,7 +918,7 @@ struct ContentView: View {
                         }
                     }
                     .padding()
-                    .background(backgroundColor)
+                    .background(currentBackground)
                     .opacity(bottomNavOpacity)
                     .onHover { hovering in
                         isHoveringBottomNav = hovering
@@ -1029,7 +1057,7 @@ struct ContentView: View {
                                     .padding(.vertical, 8)
                                     .background(
                                         RoundedRectangle(cornerRadius: 4)
-                                            .fill(backgroundColor(for: entry))
+                                            .fill(entryBackground(for: entry))
                                     )
                                 }
                                 .buttonStyle(PlainButtonStyle())
@@ -1053,7 +1081,7 @@ struct ContentView: View {
                     .scrollIndicators(.never)
                 }
                 .frame(width: 200)
-                .background(backgroundColor)
+                .background(currentBackground)
             }
         }
         .frame(minWidth: 1100, minHeight: 600)
@@ -1065,6 +1093,12 @@ struct ContentView: View {
         }
         .onChange(of: text) { _, _ in
             // Save current entry when text changes
+            if let currentId = selectedEntryId,
+               let currentEntry = entries.first(where: { $0.id == currentId }) {
+                saveEntry(entry: currentEntry)
+            }
+        }
+        .onChange(of: title) { _ in
             if let currentId = selectedEntryId,
                let currentEntry = entries.first(where: { $0.id == currentId }) {
                 saveEntry(entry: currentEntry)
@@ -1090,7 +1124,7 @@ struct ContentView: View {
         }
     }
     
-    private func backgroundColor(for entry: HumanEntry) -> Color {
+    private func entryBackground(for entry: HumanEntry) -> Color {
         if entry.id == selectedEntryId {
             return Color.gray.opacity(0.1)  // More subtle selection highlight
         } else if entry.id == hoveredEntryId {
@@ -1162,7 +1196,7 @@ struct ContentView: View {
             if let defaultMessageURL = Bundle.main.url(forResource: "default", withExtension: "md"),
                let defaultMessage = try? String(contentsOf: defaultMessageURL, encoding: .utf8) {
                 title = ""
-                text = defaultMessage
+                text = "\n\n" + defaultMessage
             }
             // Save the welcome message immediately
             saveEntry(entry: newEntry)
@@ -1171,7 +1205,7 @@ struct ContentView: View {
         } else {
             // Regular new entry starts empty
             title = ""
-            text = ""
+            text = "\n\n"
             // Randomize placeholder text for new entry
             placeholderText = placeholderOptions.randomElement() ?? "Begin writing"
             // Save the empty entry
