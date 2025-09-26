@@ -44,10 +44,13 @@ struct HeartEmoji: Identifiable {
 }
 
 struct ContentView: View {
-    private let headerString = "\n\n"
     @State private var entries: [HumanEntry] = []
     @State private var text: String = ""  // Body text
     @State private var title: String = ""
+
+    @State private var backgroundColor: Color = .white
+    @State private var themeIndex: Int = 0
+
     
     @State private var isFullscreen = false
     @State private var selectedFont: String = "Lato-Regular"
@@ -99,16 +102,17 @@ struct ContentView: View {
         (Color(red: 0.95, green: 0.95, blue: 0.90), .light),
         (Color(red: 0.90, green: 0.95, blue: 0.98), .light),
         (.black, .dark)
+
     ]
     let placeholderOptions = [
-        "\n\nBegin writing",
-        "\n\nPick a thought and go",
-        "\n\nStart typing",
-        "\n\nWhat's on your mind",
-        "\n\nJust start",
-        "\n\nType your first thought",
-        "\n\nStart with one sentence",
-        "\n\nJust say it"
+        "Begin writing",
+        "Pick a thought and go",
+        "Start typing",
+        "What's on your mind",
+        "Just start",
+        "Type your first thought",
+        "Start with one sentence",
+        "Just say it"
     ]
     
     // Add file manager and save timer
@@ -166,6 +170,7 @@ struct ContentView: View {
         let option = themeOptions[savedIndex % themeOptions.count]
         _themeIndex = State(initialValue: savedIndex)
         _currentBackground = State(initialValue: option.color)
+
         _colorScheme = State(initialValue: option.scheme)
     }
     
@@ -178,11 +183,13 @@ struct ContentView: View {
     private func saveText() {
         let documentsDirectory = getDocumentsDirectory()
         let fileURL = documentsDirectory.appendingPathComponent("entry.md")
-        
+
         print("Attempting to save file to: \(fileURL.path)")
-        
+
+        let combined = title + "\n" + text
         do {
             let combined = title + "\n" + text
+
             try combined.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved file")
         } catch {
@@ -190,14 +197,14 @@ struct ContentView: View {
             print("Error details: \(error.localizedDescription)")
         }
     }
-    
+
     // Add function to load text
     private func loadText() {
         let documentsDirectory = getDocumentsDirectory()
         let fileURL = documentsDirectory.appendingPathComponent("entry.md")
-        
+
         print("Attempting to load file from: \(fileURL.path)")
-        
+
         do {
             if fileManager.fileExists(atPath: fileURL.path) {
                 let content = try String(contentsOf: fileURL, encoding: .utf8)
@@ -379,6 +386,10 @@ struct ContentView: View {
         let defaultLineHeight = getLineHeight(font: font)
         return (fontSize * 1.5) - defaultLineHeight
     }
+
+    var titleFontSize: CGFloat {
+        fontSize * 1.5
+    }
     
     var fontSizeButtonTitle: String {
         return "\(Int(fontSize))px"
@@ -399,7 +410,6 @@ struct ContentView: View {
     }
     
     var body: some View {
-        let buttonBackground = colorScheme == .light ? Color.white : Color.black
         let navHeight: CGFloat = 68
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
         let textHoverColor = colorScheme == .light ? Color.black : Color.white
@@ -449,26 +459,38 @@ struct ContentView: View {
 
                     .id("\(selectedFont)-\(fontSize)-\(colorScheme)-\(themeIndex)")
                     .padding(.bottom, bottomNavOpacity > 0 ? navHeight : 0)
+
                     .ignoresSafeArea()
-                    .colorScheme(colorScheme)
-                    .onAppear {
-                        placeholderText = placeholderOptions.randomElement() ?? "\n\nBegin writing"
-                        // Removed findSubview code which was causing errors
-                    }
-                    .overlay(
-                        ZStack(alignment: .topLeading) {
-                            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Text(placeholderText)
-                                    .font(.custom(selectedFont, size: fontSize))
-                                    .foregroundColor(colorScheme == .light ? .gray.opacity(0.5) : .gray.opacity(0.6))
-                                // .padding(.top, 8)
-                                // .padding(.leading, 8)
-                                    .allowsHitTesting(false)
-                                    .offset(x: 5, y: placeholderOffset)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    TextField("Title", text: $title)
+                        .font(.custom(selectedFont, size: titleFontSize))
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 4)
+                        .textFieldStyle(PlainTextFieldStyle())
+
+                    TextEditor(text: $text)
+                        .background(backgroundColor)
+                        .font(.custom(selectedFont, size: fontSize))
+                        .foregroundColor(colorScheme == .light ? Color(red: 0.20, green: 0.20, blue: 0.20) : Color(red: 0.9, green: 0.9, blue: 0.9))
+                        .scrollContentBackground(.hidden)
+                        .scrollIndicators(.never)
+                        .lineSpacing(lineHeight)
+                        .frame(maxWidth: 650)
+                        .background(
+                            GeometryReader { _ in
+                                let lineHeight = fontSize * 1.5
+                                let lines = text.components(separatedBy: "\n").count
+                                Rectangle()
+                                    .fill(colorScheme == .light ? Color.gray.opacity(0.1) : Color.white.opacity(0.1))
+                                    .frame(height: lineHeight)
+                                    .offset(y: lineHeight * CGFloat(max(lines - 1, 0)))
+                                    .animation(.easeInOut(duration: 0.2), value: text)
                             }
                         }, alignment: .topLeading
                     )
                 }
+
 
                 VStack {
                     Spacer()
@@ -663,7 +685,7 @@ struct ContentView: View {
                             }
                             .popover(isPresented: $showingChatMenu, attachmentAnchor: .point(UnitPoint(x: 0.5, y: 0)), arrowEdge: .top) {
                                 VStack(spacing: 0) { // Wrap everything in a VStack for consistent styling and onChange
-                                    let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    let trimmedText = (title + "\n" + text).trimmingCharacters(in: .whitespacesAndNewlines)
                                     
                                     // Calculate potential URL lengths
                                     let gptFullText = aiChatPrompt + "\n\n" + trimmedText
@@ -707,7 +729,7 @@ struct ContentView: View {
                                             }
                                         }
                                         
-                                    } else if text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("hi. my name is farza.") {
+                                    } else if (title + "\n" + text).trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("hi. my name is farza.") {
                                         Text("Yo. Sorry, you can't chat with the guide lol. Please write your own entry.")
                                             .font(.system(size: 14))
                                             .foregroundColor(popoverTextColor)
@@ -791,7 +813,7 @@ struct ContentView: View {
                                 .cornerRadius(8)
                                 .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
                                 // Reset copied state when popover dismisses
-                                .onChange(of: showingChatMenu) { newValue in
+                                .onChange(of: showingChatMenu) { _, newValue in
                                     if !newValue {
                                         didCopyPrompt = false
                                     }
@@ -846,7 +868,9 @@ struct ContentView: View {
                             Button(action: {
                                 themeIndex = (themeIndex + 1) % themeOptions.count
                                 let option = themeOptions[themeIndex]
+
                                 currentBackground = option.color
+
                                 colorScheme = option.scheme
                                 UserDefaults.standard.set(themeIndex, forKey: "themeIndex")
                             }) {
@@ -908,9 +932,10 @@ struct ContentView: View {
                             }
                         }
                     }
+                    }
                 }
             }
-            
+
             // Right sidebar
             if showingSidebar {
                 Divider()
@@ -1066,7 +1091,7 @@ struct ContentView: View {
             showingSidebar = false  // Hide sidebar by default
             loadExistingEntries()
         }
-        .onChange(of: text) { _ in
+        .onChange(of: text) { _, _ in
             // Save current entry when text changes
             if let currentId = selectedEntryId,
                let currentEntry = entries.first(where: { $0.id == currentId }) {
@@ -1132,7 +1157,7 @@ struct ContentView: View {
     private func saveEntry(entry: HumanEntry) {
         let documentsDirectory = getDocumentsDirectory()
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
-        
+
         do {
             let combined = title + "\n" + text
             try combined.write(to: fileURL, atomically: true, encoding: .utf8)
@@ -1142,11 +1167,11 @@ struct ContentView: View {
             print("Error saving entry: \(error)")
         }
     }
-    
+
     private func loadEntry(entry: HumanEntry) {
         let documentsDirectory = getDocumentsDirectory()
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
-        
+
         do {
             if fileManager.fileExists(atPath: fileURL.path) {
                 let content = try String(contentsOf: fileURL, encoding: .utf8)
@@ -1182,7 +1207,7 @@ struct ContentView: View {
             title = ""
             text = "\n\n"
             // Randomize placeholder text for new entry
-            placeholderText = placeholderOptions.randomElement() ?? "\n\nBegin writing"
+            placeholderText = placeholderOptions.randomElement() ?? "Begin writing"
             // Save the empty entry
             saveEntry(entry: newEntry)
         }
@@ -1346,7 +1371,7 @@ struct ContentView: View {
         ]
         
         // Trim the initial newlines before creating the PDF
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedText = (title + "\n" + text).trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Create the attributed string with formatting
         let attributedString = NSAttributedString(string: trimmedText, attributes: textAttributes)
